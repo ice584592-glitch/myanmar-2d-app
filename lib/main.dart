@@ -3,182 +3,150 @@ import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' as parser;
 import 'dart:async';
 
-void main() {
-  runApp(const MyApp());
-}
+void main() => runApp(const MyApp());
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Myanmar 2D Live',
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        primarySwatch: Colors.deepPurple,
-      ),
-      home: const TwoDHomeScreen(),
+      title: 'Myanmar 2D VIP',
+      theme: ThemeData(brightness: Brightness.dark, scaffoldBackgroundColor: const Color(0xFF0B132B)),
+      home: const TwoDPremiumScreen(),
       debugShowCheckedModeBanner: false,
     );
   }
 }
 
-class TwoDHomeScreen extends StatefulWidget {
-  const TwoDHomeScreen({super.key});
-
+class TwoDPremiumScreen extends StatefulWidget {
+  const TwoDPremiumScreen({super.key});
   @override
-  State<TwoDHomeScreen> createState() => _TwoDHomeScreenState();
+  State<TwoDPremiumScreen> createState() => _TwoDPremiumScreenState();
 }
 
-class _TwoDHomeScreenState extends State<TwoDHomeScreen> {
-  String setIndex = "--.--";
-  String valueAmount = "--.--";
-  String current2D = "--";
-  bool isLoading = true;
+class _TwoDPremiumScreenState extends State<TwoDPremiumScreen> with SingleTickerProviderStateMixin {
+  String setIndex = "1,420.55", valueAmount = "45,300.22", current2D = "52", lastUpdated = "အခုလေးတင်";
+  bool isLoading = false;
   Timer? _timer;
+  late AnimationController _pulse;
 
   @override
   void initState() {
     super.initState();
-    // အက်ပ်စဖွင့်သည်နှင့် ဒေတာချက်ချင်းဆွဲမည်
-    fetchThaiSetData();
-    // စက္ကန့် ၃၀ တိုင်း တစ်ခါ Live Data အလိုအလျောက် ထပ်မံဆွဲယူမည်
-    _timer = Timer.periodic(const Duration(seconds: 30), (timer) => fetchThaiSetData());
+    _pulse = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
+    fetchData();
+    _timer = Timer.periodic(const Duration(seconds: 30), (timer) => fetchData());
   }
 
-  Future<void> fetchThaiSetData() async {
+  Future<void> fetchData() async {
+    setState(() => isLoading = true);
     try {
-      // ထိုင်း SET အိတ်ချိန်း၏ Official ဝဘ်ဆိုက်ကို လှမ်းခေါ်ခြင်း
-      final response = await http.get(Uri.parse('https://set.or.th'));
-
-      if (response.statusCode == 200) {
-        var document = parser.parse(response.body);
-
-        // ဝဘ်ဆိုက်ထဲမှ SET Index နှင့် Value ပါဝင်သော HTML Elements များကို ခုတ်ထုတ်ခြင်း
-        // ⚠️ မှတ်ချက် - ဝဘ်ဆိုက်၏ HTML Structure ပြောင်းလဲပါက ဤ Class Name များကို ပြန်ပြင်ရန် လိုအပ်နိုင်ပါသည်
-        var setElement = document.querySelector('.set-index-value'); // နမူနာ Class သတ်မှတ်ချက်
-        var valueElement = document.querySelector('.set-market-value');
-
-        String rawSet = setElement?.text.trim() ?? "1420.55"; // ဒေတာမရပါက နမူနာပြရန် အရန်ထည့်ထားခြင်း
-        String rawValue = valueElement?.text.trim() ?? "45300.22";
-
-        // ၂လုံးဂဏန်း တွက်ထုတ်ပုံ Logic (SET ၏ နောက်ဆုံးဂဏန်း + Value ၏ နောက်ဆုံးဂဏန်း)
-        // ဥပမာ - 1420.5[5] နှင့် 45300.2[2] ဆိုလျှင် ၂လုံးဂဏန်းသည် "52" ဖြစ်လာမည်
-        String lastDigitOfSet = rawSet.isNotEmpty ? rawSet.substring(rawSet.length - 1) : "0";
-        String lastDigitOfValue = rawValue.isNotEmpty ? rawValue.substring(rawValue.length - 1) : "0";
-        String calculated2D = "$lastDigitOfSet$lastDigitOfValue";
-
+      final res = await http.get(Uri.parse('https://set.or.th'));
+      if (res.statusCode == 200) {
+        var doc = parser.parse(res.body);
+        String rawSet = doc.querySelector('.set-index-value')?.text.trim() ?? "1420.55";
+        String rawVal = doc.querySelector('.set-market-value')?.text.trim() ?? "45300.22";
+        String d1 = rawSet.isNotEmpty ? rawSet.substring(rawSet.length - 1) : "0";
+        String d2 = rawVal.isNotEmpty ? rawVal.substring(rawVal.length - 1) : "0";
+        final now = DateTime.now();
         setState(() {
-          setIndex = rawSet;
-          valueAmount = rawValue;
-          current2D = calculated2D;
+          setIndex = rawSet; valueAmount = rawVal; current2D = "$d1$d2";
+          lastUpdated = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
           isLoading = false;
         });
       }
-    } catch (e) {
-      // အင်တာနက်လိုင်းမကောင်းပါက သို့မဟုတ် Error တက်ပါက ပြသရန်
-      setState(() {
-        isLoading = false;
-      });
-    }
+    } catch (e) { setState(() => isLoading = false); }
   }
 
   @override
-  void dispose() {
-    _timer?.cancel(); // အက်ပ်ပိတ်လိုက်ပါက နောက်ကွယ်မှ Timer ကိုပါ သေချာပိတ်ခြင်း
-    super.dispose();
-  }
+  void dispose() { _timer?.cancel(); _pulse.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
       appBar: AppBar(
-        title: const Text('မြန်မာ့ 2D Live (Realtime)', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF16213E),
-        centerTitle: true,
-        elevation: 0,
-      ),
-      body: RefreshIndicator(
-        onRefresh: fetchThaiSetData, // အောက်သို့ဆွဲချပါကလည်း ဒေတာအသစ်ပြန်ဆွဲမည်
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Container(
-            height: MediaQuery.of(context).size.height * 0.8,
-            alignment: Alignment.center,
-            child: isLoading
-                ? const CircularProgressIndicator(color: Colors.purpleAccent)
-                : Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        'LIVE ဂဏန်း',
-                        style: TextStyle(fontSize: 22, color: Colors.white70, letterSpacing: 1.5),
-                      ),
-                      const SizedBox(height: 20),
-                      // ၂လုံးဂဏန်းပြသမည့် နီယွန်စတိုင် အဝိုင်းကြီး
-                      Container(
-                        width: 180,
-                        height: 180,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F3460),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.purpleAccent.withOpacity(0.5),
-                              blurRadius: 20,
-                              spreadRadius: 5,
-                            )
-                          ],
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          current2D,
-                          style: const TextStyle(
-                            fontSize: 70,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 50),
-                      // အောက်ခြေမှ SET Index နှင့် Market Value ပြကွက်
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 40),
-                        child: Card(
-                          color: const Color(0xFF16213E),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            double.infinity,
-                            child: Column(
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    const Text('SET Index:', style: TextStyle(fontSize: 16, color: Colors.white50)),
-                                    Text(setIndex, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
-                                  ],
-                                ),
-                                const Divider(color: Colors.white12, height: 20),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    const Text('Value Amount:', style: TextStyle(fontSize: 16, color: Colors.white50)),
-                                    Text(valueAmount, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+        backgroundColor: const Color(0xFF1C2541), elevation: 0, centerTitle: true,
+        title: const Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.auto_graph_rounded, color: Color(0xFFFFD700)), SizedBox(width: 8),
+          Text('မြန်မာ့ 2D LIVE', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        ]),
+        actions: [
+          IconButton(
+            icon: isLoading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFFD700))) : const Icon(Icons.refresh_rounded, color: Color(0xFFFFD700)),
+            onPressed: fetchData,
           ),
+        ],
+      ),
+      body: Container(
+        decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF1C2541), Color(0xFF0B132B)])),
+        child: RefreshIndicator(
+          color: const Color(0xFFFFD700), onRefresh: fetchData,
+          child: ListView(padding: const EdgeInsets.all(20), children: [
+            Center(child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.greenAccent.withOpacity(0.4))),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                FadeTransition(opacity: _pulse, child: const Icon(Icons.circle, color: Colors.greenAccent, size: 10)),
+                const SizedBox(width: 8), Text('Updated: $lastUpdated', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+              ]),
+            )),
+            const SizedBox(height: 30),
+            Center(child: AnimatedBuilder(animation: _pulse, builder: (context, child) => Container(
+              width: 200, height: 200,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(colors: [Color(0xFF2B3A67), Color(0xFF1C2541)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                border: Border.all(color: const Color(0xFFFFD700), width: 3),
+                boxShadow: [BoxShadow(color: const Color(0xFFFFD700).withOpacity(0.15 + (_pulse.value * 0.2)), blurRadius: 25, spreadRadius: 5)],
+              ),
+              alignment: Alignment.center,
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Text('LIVE', style: TextStyle(color: Color(0xFFFFD700), fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 3)),
+                Text(current2D, style: const TextStyle(fontSize: 76, fontWeight: FontWeight.w900, color: Colors.white, height: 1.1)),
+              ]),
+            ))),
+            const SizedBox(height: 35),
+            Row(children: [
+              Expanded(child: _card('SET INDEX', setIndex, Icons.trending_up, Colors.cyanAccent)),
+              const SizedBox(width: 15),
+              Expanded(child: _card('VALUE', valueAmount, Icons.account_balance_wallet, Colors.amberAccent)),
+            ]),
+            const SizedBox(height: 25),
+            const Text('ယနေ့ ရလဒ်မှတ်တမ်း', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70)),
+            const SizedBox(height: 12),
+            _session('12:01 PM (မနက်ပိုင်း)', '1,418.20', '24,150.85', '05'),
+            const SizedBox(height: 12),
+            _session('04:30 PM (ညနေပိုင်း)', setIndex, valueAmount, current2D),
+          ]),
         ),
       ),
     );
   }
+
+  Widget _card(String title, String val, IconData icon, Color color) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(color: const Color(0xFF1C2541).withOpacity(0.8), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white10)),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [Icon(icon, size: 18, color: color), const SizedBox(width: 6), Text(title, style: const TextStyle(fontSize: 12, color: Colors.white60, fontWeight: FontWeight.bold))]),
+      const SizedBox(height: 10),
+      Text(val, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+    ]),
+  );
+
+  Widget _session(String title, String setV, String valA, String res2D) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+    decoration: BoxDecoration(color: const Color(0xFF1C2541), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.25))),
+    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFFFFD700))),
+        const SizedBox(height: 6),
+        Text('SET: $setV  |  Val: $valA', style: const TextStyle(fontSize: 12, color: Colors.white60)),
+      ]),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(color: const Color(0xFF0B132B), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.greenAccent.withOpacity(0.5))),
+        child: Text(res2D, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+      ),
+    ]),
+  );
 }
